@@ -5,6 +5,8 @@ import requests
 from requests.utils import cookiejar_from_dict, dict_from_cookiejar
 import re
 import json
+from bs4 import BeautifulSoup as bs
+import lxml
 import getpass
 import hashlib
 import time
@@ -81,6 +83,7 @@ class uestc():
 
 
     def login_password(self, username, password):
+        self.r.cookies.clear()
         loginURLCaptcha = "http://idas.uestc.edu.cn/authserver/needCaptcha.html?username=%s&_=%s" % (username, str(time.time()))
         visit_r = self.r.get(url=self.loginURL, headers=self.headers)
         check_captcha_r = self.r.get(loginURLCaptcha, headers=self.headers)
@@ -97,10 +100,9 @@ class uestc():
             '_eventId': 'submit',
             'rmShown': '1'
         }
-        # print(post_data)
         login_r = self.r.post(url=self.loginURL, data=post_data, headers=self.headers)
-
         result = login_r.text
+        print(result)
         AC = re.findall(u'href="http://eams.uestc.edu.cn/eams/"><b>教务系统', result)
         if AC:
             res = self.get_eas()
@@ -232,13 +234,49 @@ class uestc():
 
         # return new_day
 
+    def get_exam_by_id(self, semester_id):
+        _ = self.r.get('http://eams.uestc.edu.cn/eams/stdExamTable!examTable.action?semester.id=%d&examType.id=1' % (semester_id))
+        html = bs(_.text, 'lxml')
+        ans = []
+        for one in html.select('.brightStyle') + html.select('.grayStyle'):
+            i = one.select('td')
+            # course_id = i[0]
+            if '考试情况尚未发布' in i[2].text:
+                continue
+            course_name = i[1].text
+            # exam_date = i[2]
+            # exam_datetime = i[3].text
+            week, date, timeline = re.findall('第(\d+)周\s星期.\((\d{4}-\d{2}-\d{2})\) (\d{2}:\d{2}-\d{2}:\d{2})', i[3].text)[0]
+            date = date.split('-')
+            timeline = timeline.split('-')
+            start = timeline[0].split(':')
+            end = timeline[1].split(':')
+            start_time = datetime(int(date[0]), int(date[1]), int(date[2]), int(start[0]), int(start[1]))
+            end_time = datetime(int(date[0]), int(date[1]), int(date[2]), int(end[0]), int(end[1]))
+
+            location = '%s@%s' % (i[4].text, i[5].text)
+            # sit = i[5].text
+            # status = i[6].text
+            # other = i[7].text
+            _ = {
+
+                'course_name': course_name,
+                'start_time': start_time,
+                'end_time': end_time,
+                'week': week,
+                'location': location
+            }
+            ans.append(_)
+        # print(ans)
+        return ans
+
     def get_course_ics(self, course_list, first, name):
 
         ics = icalendar.Calendar()
         ics.add('PRODID', '-//Uestc Course//lc4t.me//')
         ics.add('version', '2.0')
-        ics.add('X-WR-CALNAME', '%s课程表' % name)
-        ics.add('X-WR-CALDESC', 'uestc %s课程表' % name)
+        ics.add('X-WR-CALNAME', '%s的课程表' % name)
+        ics.add('X-WR-CALDESC', 'uestc %s的课程表' % name)
         ics.add('X-WR-TIMEZONE', "Asia/Shanghai")
         ics.add('CALSCALE', 'GREGORIAN')
         ics.add('METHOD', 'PUBLISH')
@@ -290,6 +328,41 @@ class uestc():
                     print('%s-%s %s' % (str(start_time), str(end_time), e['summary']))
         return ics
 
+    def get_exam_ics(self, exam_list, name):
+        ics = icalendar.Calendar()
+        ics.add('PRODID', '-//Uestc Exam//lc4t.me//')
+        ics.add('version', '2.0')
+        ics.add('X-WR-CALNAME', '%s的考试' % name)
+        ics.add('X-WR-CALDESC', 'uestc %s的课程表' % name)
+        ics.add('X-WR-TIMEZONE', "Asia/Shanghai")
+        ics.add('CALSCALE', 'GREGORIAN')
+        ics.add('METHOD', 'PUBLISH')
+
+        tz = pytz.timezone('Asia/Shanghai')
+
+
+        for i in exam_list:
+            e = icalendar.Event()
+
+            # start_time, end_time = get_start_end(first, i[1], i[2], i[0], week)
+            e.add('dtstart', tz.localize(i['start_time']))
+            e.add('dtend', tz.localize(i['end_time']))
+            e['summary'] = '(%s)%s [%s]' % (i['week'], i['course_name'], i['location'])
+
+            e['location'] = icalendar.vText(i['location'])
+            e['TRANSP'] = icalendar.vText('OPAQUE')
+            e['status'] = 'confirmed'
+            _now = datetime.now()
+            now = tz.localize(_now)
+            e.add('created', now)
+            e.add('DTSTAMP', _now)
+            md5 = hashlib.md5()
+            md5.update(('%s%s' % (str(now), i['course_name'])).encode())
+            e["UID"] = '%s@lc4t.me' % md5.hexdigest()
+            e.add('LAST-MODIFIED', _now)
+            ics.add_component(e)
+            print('%s-%s %s' % (str(i['start_time']), str(i['end_time']), e['summary']))
+        return ics
 
 def lazyJsonParse(j):
     j = re.sub(r"{\s*'?(\w)", r'{"\1', j)
@@ -311,6 +384,8 @@ name = input('your name:')
 for i in a.get_semester():
     print(i['id'], i['text'])
 s_id = int(input('give me id:'))
+
+# get courses
 s = a.get_course_by_id(s_id)
 print('give me one day in first week in the following 3 lines')
 year = input('year:')
@@ -319,3 +394,8 @@ day = input('day:')
 first = generate_first_datetime(int(year), int(month), int(day))
 ics = a.get_course_ics(s, first, name).to_ical()
 open('%s的课程表.ics' % (name), 'wb').write(ics)
+
+# get exam
+s = a.get_exam_by_id(s_id)
+ics = a.get_exam_ics(s, name).to_ical()
+open('%s的考试.ics' % (name), 'wb').write(ics)
