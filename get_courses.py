@@ -312,7 +312,7 @@ class uestc():
                     start_time, end_time = get_start_end(first, i[1], i[2], i[0], week)
                     e.add('dtstart', tz.localize(start_time))
                     e.add('dtend', tz.localize(end_time))
-                    e['summary'] = '(%s)%s [%s] @%s' % (week, course['course_name'], course['teacher_name'], course['place'])
+                    e['summary'] = '(%s)%s [%s] @%s' % (week, course['teacher_name'], course['place'], course['course_name'])
                     e['location'] = icalendar.vText(course['place'])
                     e['TRANSP'] = icalendar.vText('OPAQUE')
                     e['status'] = 'confirmed'
