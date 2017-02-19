@@ -102,7 +102,6 @@ class uestc():
         }
         login_r = self.r.post(url=self.loginURL, data=post_data, headers=self.headers)
         result = login_r.text
-        print(result)
         AC = re.findall(u'href="http://eams.uestc.edu.cn/eams/"><b>教务系统', result)
         if AC:
             res = self.get_eas()
@@ -159,13 +158,16 @@ class uestc():
         ans = []
         for k, v in semester.items():
             for i in range(2):
-                _ = {
+                try:
+                    _ = {
                     'id': v[i]['id'],
                     'name': v[i]['name'],
                     'schoolYear': v[i]['schoolYear'],
                     'text': '%s学年 第%s学期' % (v[0]['schoolYear'], v[i]['name'])
-                }
-                ans.append(_)
+                    }
+                    ans.append(_)
+                except IndexError:
+                    continue
         self.r.post("http://eams.uestc.edu.cn/eams/dataQuery.action", data={'dataType': "projectId"})
         self.r.post("http://eams.uestc.edu.cn/eams/dataQuery.action", data={'entityId': ""})
         return ans
@@ -365,6 +367,7 @@ class uestc():
         return ics
 
 def lazyJsonParse(j):
+    print(j)
     j = re.sub(r"{\s*'?(\w)", r'{"\1', j)
     j = re.sub(r",\s*'?(\w)", r',"\1', j)
     j = re.sub(r"(\w)'?\s*:", r'\1":', j)

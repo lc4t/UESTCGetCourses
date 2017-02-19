@@ -1,4 +1,4 @@
 requests
-getpass
+getpass2
 icalendar
 pytz
