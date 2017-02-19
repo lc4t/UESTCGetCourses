@@ -166,7 +166,8 @@ class uestc():
                     'text': '%s学年 第%s学期' % (v[0]['schoolYear'], v[i]['name'])
                     }
                     ans.append(_)
-                except IndexError:
+                except IndexError as e:
+                    print(e)
                     continue
         self.r.post("http://eams.uestc.edu.cn/eams/dataQuery.action", data={'dataType': "projectId"})
         self.r.post("http://eams.uestc.edu.cn/eams/dataQuery.action", data={'entityId': ""})
@@ -193,7 +194,9 @@ class uestc():
         }
         _ = requests.post('http://eams.uestc.edu.cn/eams/courseTableForStd!courseTable.action', data=data, headers=headers)
         # _ = self.r.post('http://eams.uestc.edu.cn/eams/courseTableForStd!courseTable.action', data=data, headers=self.headers)
-
+        if '请输入密码' in _.text:
+            print('登录失败,请使用JSESSIONID登录')
+            exit()
         text = re.findall('activity\s=\snew\sTaskActivity\("(.*?)","(.*?)","(.*?)","(.*?)","(.*?)","(.*?)","(\d+)"\);\s+((index\s=\d*\*unitCount\+\d+;\s+table0\.activities\[index\]\[table0\.activities\[index\]\.length\]=activity;\s+)+)', _.text)
         ans = []
         for i in text:
@@ -367,7 +370,6 @@ class uestc():
         return ics
 
 def lazyJsonParse(j):
-    print(j)
     j = re.sub(r"{\s*'?(\w)", r'{"\1', j)
     j = re.sub(r",\s*'?(\w)", r',"\1', j)
     j = re.sub(r"(\w)'?\s*:", r'\1":', j)
